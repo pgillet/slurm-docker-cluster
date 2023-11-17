@@ -27,7 +27,7 @@ The compose file will create the following named volumes:
 Build the image locally:
 
 ```console
-docker build -t slurm-docker-cluster:21.08.6 .
+docker build -t slurm-docker-cluster:21.08 .
 ```
 
 Build a different version of Slurm using Docker build args and the Slurm Git
@@ -68,7 +68,7 @@ script:
 > You can check the status of the cluster by viewing the logs: `docker-compose
 > logs -f`
 
-## Accessing the Cluster
+## Accessing the Cluster from the command line
 
 Use `docker exec` to run a bash shell on the controller container:
 
@@ -97,6 +97,121 @@ Submitted batch job 2
 [root@slurmctld data]# ls
 slurm-2.out
 ```
+
+## Accessing the Cluster via Slurm REST API
+
+Create a JSON Web Token (JWT) for authentication to `slurmrestd`.
+
+```console
+docker exec slurmctld /usr/bin/scontrol token username=slurm
+```
+
+Copy/paste the result in your shell to create the `SLURM_JWT` env variable.
+
+List all the OpenAPI plugins supported by `slurmrestd`.
+
+```console
+docker exec slurmctld /usr/sbin/slurmrestd -s list
+```
+
+```console
+slurmrestd: Possible OpenAPI plugins:
+slurmrestd: openapi/v0.0.35
+slurmrestd: openapi/v0.0.37
+slurmrestd: openapi/dbv0.0.36
+slurmrestd: openapi/dbv0.0.37
+slurmrestd: openapi/v0.0.36
+```
+
+Note the highest value, here `v0.0.37`, which is part of the base URI `http://localhost:8080/slurm/v0.0.37`.
+
+### Examples
+
+```console
+curl --header "X-SLURM-USER-NAME: slurm" --header "X-SLURM-USER-TOKEN: $SLURM_JWT" 'http://localhost:8080/slurm/v0.0.37/ping'
+```
+
+```console
+{
+   "meta": {
+     "plugin": {
+       "type": "openapi\/v0.0.37",
+       "name": "Slurm OpenAPI v0.0.37"
+     },
+     "Slurm": {
+       "version": {
+         "major": 21,
+         "micro": 6,
+         "minor": 8
+       },
+       "release": "21.08.6"
+     }
+   },
+   "errors": [
+   ],
+   "pings": [
+     {
+       "hostname": "slurmctld",
+       "ping": "UP",
+       "status": 0,
+       "mode": "primary"
+     }
+   ]
+ }
+```
+
+```console
+curl --header "X-SLURM-USER-NAME: slurm" --header "X-SLURM-USER-TOKEN: $SLURM_JWT" --header "Content-Type: application/json" -d @example_job.json 'http://localhost:8080/slurm/v0.0.37/job/submit'
+```
+```console
+{
+   "meta": {
+     "plugin": {
+       "type": "openapi\/v0.0.37",
+       "name": "Slurm OpenAPI v0.0.37"
+     },
+     "Slurm": {
+       "version": {
+         "major": 21,
+         "micro": 6,
+         "minor": 8
+       },
+       "release": "21.08.6"
+     }
+   },
+   "errors": [
+   ],
+   "job_id": 1,
+   "step_id": "BATCH",
+   "job_submit_user_msg": ""
+ }
+```
+
+### See logs
+
+See logs from slurmrestd.
+
+```console
+docker-compose logs -f slurmctld
+```
+
+See logs from slurmctld.
+
+```console
+docker exec slurmctld tail -f /var/log/slurm/slurmd.log
+```
+
+See the completed jobs.
+
+```console
+docker exec slurmctld tail -f /var/log/slurm/jobcomp.log
+```
+
+### See also
+
+- [slurmrestd](https://slurm.schedmd.com/slurmrestd.html)
+- [Slurm REST API](https://slurm.schedmd.com/rest.html)
+- [Slurm REST API Reference](https://slurm.schedmd.com/rest_api.html)
 
 ## Stopping and Restarting the Cluster
 

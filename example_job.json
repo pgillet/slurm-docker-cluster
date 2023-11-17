@@ -1,0 +1,14 @@
+{
+  "script": "#!/bin/bash\nsleep 30",
+  "job": {
+    "name": "ExampleJob",
+    "account": "sub1",
+    "hold": false,
+    "environment": {
+      "PATH": "/bin"
+    },
+    "tasks": 2,
+    "memory_per_cpu": 10,
+    "time_limit": 240
+  }
+}

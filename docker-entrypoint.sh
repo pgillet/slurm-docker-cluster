@@ -37,10 +37,17 @@ then
 
     echo "---> Starting the Slurm Controller Daemon (slurmctld) ..."
     if /usr/sbin/slurmctld -V | grep -q '17.02' ; then
-        exec gosu slurm /usr/sbin/slurmctld -Dvvv
+        gosu slurm /usr/sbin/slurmctld -vvv
     else
-        exec gosu slurm /usr/sbin/slurmctld -i -Dvvv
+        gosu slurm /usr/sbin/slurmctld -i -vvv
     fi
+
+    echo "---> Starting the Slurm REST Daemon (slurmrestd) ..."
+    export SLURMRESTD_SECURITY=disable_user_check
+    # slurmrestd -s list
+    export SLURMRESTD_OPENAPI_PLUGINS=dbv0.0.37,v0.0.37
+    export SLURM_JWT=daemon
+    gosu slurm /usr/sbin/slurmrestd -a rest_auth/jwt -vvv 0.0.0.0:8080
 fi
 
 if [ "$1" = "slurmd" ]

@@ -7,6 +7,7 @@ LABEL org.opencontainers.image.source="https://github.com/giovtorres/slurm-docke
       maintainer="Giovanni Torres"
 
 ARG SLURM_TAG=slurm-21-08-6-1
+ARG LIBJWT_TAG=v1.12.0
 ARG GOSU_VERSION=1.11
 
 RUN set -ex \
@@ -35,6 +36,10 @@ RUN set -ex \
        vim-enhanced \
        http-parser-devel \
        json-c-devel \
+       autoconf \
+       automake \
+       libtool \
+       jansson-devel \
     && yum clean all \
     && rm -rf /var/cache/yum
 
@@ -44,19 +49,32 @@ RUN pip3 install Cython nose
 
 RUN set -ex \
     && wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-amd64" \
-    && wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-amd64.asc" \
-    && export GNUPGHOME="$(mktemp -d)" \
-    && gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
-    && gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu \
-    && rm -rf "${GNUPGHOME}" /usr/local/bin/gosu.asc \
+    #&& wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-amd64.asc" \
+    #&& export GNUPGHOME="$(mktemp -d)" \
+    #&& gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
+    #&& gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu \
+    #&& rm -rf "${GNUPGHOME}" /usr/local/bin/gosu.asc \
     && chmod +x /usr/local/bin/gosu \
     && gosu nobody true
+
+# JWT library
+# JWT authentication requires libjwt
+RUN set -x \
+    && git clone --depth 1 --single-branch -b ${LIBJWT_TAG} https://github.com/benmcollins/libjwt.git libjwt \
+    && pushd libjwt \
+    && autoreconf --force --install \
+    && ./configure --prefix=/usr \
+    && make -j \
+    && make install \
+    && popd \
+    && rm -rf libjwt
 
 RUN set -x \
     && git clone -b ${SLURM_TAG} --single-branch --depth=1 https://github.com/SchedMD/slurm.git \
     && pushd slurm \
     && ./configure --enable-debug --prefix=/usr --sysconfdir=/etc/slurm \
         --with-mysql_config=/usr/bin  --libdir=/usr/lib64 \
+        --with-jwt=/usr \
     && make install \
     && install -D -m644 etc/cgroup.conf.example /etc/slurm/cgroup.conf.example \
     && install -D -m644 etc/slurm.conf.example /etc/slurm/slurm.conf.example \
@@ -91,6 +109,14 @@ RUN set -x \
     && chown slurm:slurm /etc/slurm/slurmdbd.conf \
     && chmod 600 /etc/slurm/slurmdbd.conf
 
+# Add JWT key to controller in StateSaveLocation
+RUN set -x \
+    && mkdir -p /var/spool/slurmd/statesave \
+    && dd if=/dev/random of=/var/spool/slurmd/statesave/jwt_hs256.key bs=32 count=1 \
+    && chown slurm:slurm /var/spool/slurmd/statesave/jwt_hs256.key \
+    && chmod 0600 /var/spool/slurmd/statesave/jwt_hs256.key \
+    && chown slurm:slurm /var/spool/slurmd/statesave \
+    && chmod 0755 /var/spool/slurmd/statesave
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

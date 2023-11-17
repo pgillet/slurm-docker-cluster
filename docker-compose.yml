@@ -43,6 +43,9 @@ services:
       - var_log_slurm:/var/log/slurm
     expose:
       - "6817"
+      - "8080"
+    ports:
+      - "8080:8080"
     depends_on:
       - "slurmdbd"
 
